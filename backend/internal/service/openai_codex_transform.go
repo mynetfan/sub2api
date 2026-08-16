@@ -270,6 +270,11 @@ func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuth
 	if isCodexSparkModel(normalizedModel) && stripCodexSparkImageGenerationTools(reqBody) {
 		result.Modified = true
 	}
+	// gpt-5.3-codex-spark also rejects reasoning.summary (HTTP 400,
+	// param=reasoning.summary); keep other reasoning fields (e.g. effort).
+	if isCodexSparkModel(normalizedModel) && stripCodexSparkReasoningSummary(reqBody) {
+		result.Modified = true
+	}
 
 	// 续链场景保留 item_reference 与 id，避免 call_id 上下文丢失。
 	if input, ok := reqBody["input"].([]any); ok {
@@ -812,6 +817,20 @@ func stripOpenAIImageGenerationToolsFromRawPayload(payload []byte) ([]byte, bool
 // advertise them by default.
 func stripCodexSparkImageGenerationTools(reqBody map[string]any) bool {
 	return stripOpenAIImageGenerationTools(reqBody)
+}
+
+// stripCodexSparkReasoningSummary removes reasoning.summary while preserving
+// other reasoning fields (e.g. effort) for spark compatibility.
+func stripCodexSparkReasoningSummary(reqBody map[string]any) bool {
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	if !ok {
+		return false
+	}
+	if _, ok := reasoning["summary"]; !ok {
+		return false
+	}
+	delete(reasoning, "summary")
+	return true
 }
 
 func hasOpenAIInputImage(reqBody map[string]any) bool {

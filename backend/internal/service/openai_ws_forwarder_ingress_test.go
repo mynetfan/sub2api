@@ -188,6 +188,33 @@ func TestStripCodexSparkImageGenerationToolFromRawPayload(t *testing.T) {
 	})
 }
 
+func TestStripCodexSparkReasoningSummaryFromRawPayload(t *testing.T) {
+	t.Run("strips_reasoning_summary_for_spark", func(t *testing.T) {
+		payload := []byte(`{"type":"response.create","model":"gpt-5.3-codex-spark","reasoning":{"summary":"auto","effort":"high"}}`)
+		updated, changed, err := stripCodexSparkReasoningSummaryFromRawPayload(payload, "gpt-5.3-codex-spark")
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.False(t, gjson.GetBytes(updated, "reasoning.summary").Exists())
+		require.Equal(t, "high", gjson.GetBytes(updated, "reasoning.effort").String())
+	})
+
+	t.Run("noop_when_summary_missing", func(t *testing.T) {
+		payload := []byte(`{"type":"response.create","model":"gpt-5.3-codex-spark","reasoning":{"effort":"medium"}}`)
+		updated, changed, err := stripCodexSparkReasoningSummaryFromRawPayload(payload, "gpt-5.3-codex-spark")
+		require.NoError(t, err)
+		require.False(t, changed)
+		require.Equal(t, string(payload), string(updated))
+	})
+
+	t.Run("keeps_reasoning_summary_for_non_spark", func(t *testing.T) {
+		payload := []byte(`{"type":"response.create","model":"gpt-5.3-codex","reasoning":{"summary":"auto","effort":"high"}}`)
+		updated, changed, err := stripCodexSparkReasoningSummaryFromRawPayload(payload, "gpt-5.3-codex")
+		require.NoError(t, err)
+		require.False(t, changed)
+		require.Equal(t, string(payload), string(updated))
+	})
+}
+
 func TestStripOpenAIImageGenerationToolsFromRawPayload(t *testing.T) {
 	t.Run("flat image tool", func(t *testing.T) {
 		payload := []byte(`{
