@@ -175,6 +175,13 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Stripped /responses image_generation tool for Codex client by account policy")
 			}
 		}
+		if strippedBody, changed, stripErr := stripCodexSparkReasoningSummaryFromRawPayload(body, account.GetMappedModel(reqModel)); stripErr != nil {
+			return nil, stripErr
+		} else if changed {
+			body = strippedBody
+			originalBody = strippedBody
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Stripped /responses reasoning.summary for Codex spark model")
+		}
 		// 透传分支只需要轻量提取字段，避免热路径全量 Unmarshal。
 		mappedModel := account.GetMappedModel(reqModel)
 		reasoningEffort := extractOpenAIReasoningEffortFromBody(body, mappedModel)
@@ -390,6 +397,15 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			return nil, decodeErr
 		}
 		if stripCodexSparkImageGenerationTools(decoded) {
+			markDecodedModified()
+		}
+	}
+	if isCodexSparkModel(upstreamModel) && gjson.GetBytes(body, "reasoning.summary").Exists() {
+		decoded, decodeErr := ensureReqBody()
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		if stripCodexSparkReasoningSummary(decoded) {
 			markDecodedModified()
 		}
 	}

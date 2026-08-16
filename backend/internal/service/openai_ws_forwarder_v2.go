@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func (s *OpenAIGatewayService) forwardOpenAIWSV2(
@@ -793,4 +794,20 @@ func stripCodexSparkImageGenerationToolFromRawPayload(payload []byte, model stri
 		return payload, false, nil
 	}
 	return stripOpenAIImageGenerationToolsFromRawPayload(payload)
+}
+
+// stripCodexSparkReasoningSummaryFromRawPayload removes reasoning.summary from a
+// raw /responses payload when the upstream model is gpt-5.3-codex-spark.
+func stripCodexSparkReasoningSummaryFromRawPayload(payload []byte, model string) ([]byte, bool, error) {
+	if !isCodexSparkModel(model) {
+		return payload, false, nil
+	}
+	if !gjson.GetBytes(payload, "reasoning.summary").Exists() {
+		return payload, false, nil
+	}
+	updated, err := sjson.DeleteBytes(payload, "reasoning.summary")
+	if err != nil {
+		return payload, false, err
+	}
+	return updated, true, nil
 }

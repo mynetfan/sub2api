@@ -1044,6 +1044,66 @@ func TestApplyCodexOAuthTransform_StripsImageGenerationToolForSparkAlias(t *test
 	require.False(t, hasTools)
 }
 
+func TestStripCodexSparkReasoningSummary(t *testing.T) {
+	t.Run("removes_summary_keeps_other_reasoning_fields", func(t *testing.T) {
+		reqBody := map[string]any{
+			"reasoning": map[string]any{
+				"summary": "auto",
+				"effort":  "high",
+			},
+		}
+		require.True(t, stripCodexSparkReasoningSummary(reqBody))
+		reasoning, ok := reqBody["reasoning"].(map[string]any)
+		require.True(t, ok)
+		require.NotContains(t, reasoning, "summary")
+		require.Equal(t, "high", reasoning["effort"])
+	})
+
+	t.Run("no_reasoning_or_non_map_is_noop", func(t *testing.T) {
+		reqBody := map[string]any{}
+		require.False(t, stripCodexSparkReasoningSummary(reqBody))
+
+		reqBody = map[string]any{"reasoning": "auto"}
+		require.False(t, stripCodexSparkReasoningSummary(reqBody))
+	})
+}
+
+func TestApplyCodexOAuthTransform_StripsReasoningSummaryForSpark(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.3-codex-spark",
+		"input": "hello",
+		"reasoning": map[string]any{
+			"summary": "auto",
+			"effort":  "medium",
+		},
+	}
+
+	result := applyCodexOAuthTransform(reqBody, true, false)
+	require.True(t, result.Modified)
+	require.Equal(t, []any{"reasoning.encrypted_content"}, reqBody["include"])
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	require.True(t, ok)
+	require.NotContains(t, reasoning, "summary")
+	require.Equal(t, "medium", reasoning["effort"])
+}
+
+func TestApplyCodexOAuthTransform_KeepsReasoningSummaryForNonSpark(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.3-codex",
+		"input": "hello",
+		"reasoning": map[string]any{
+			"summary": "auto",
+			"effort":  "medium",
+		},
+	}
+
+	applyCodexOAuthTransform(reqBody, true, false)
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "auto", reasoning["summary"])
+	require.Equal(t, "medium", reasoning["effort"])
+}
+
 func TestStripOpenAIImageGenerationTools_StripsNamespaceFormats(t *testing.T) {
 	imageNamespace := func() map[string]any {
 		return map[string]any{
