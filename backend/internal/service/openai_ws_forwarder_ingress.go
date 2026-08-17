@@ -346,6 +346,19 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			normalized = stripped
 			logOpenAIWSModeInfo("ingress_ws_codex_spark_reasoning_summary_stripped account_id=%d", account.ID)
 		}
+		// gpt-5.3-codex-spark rejects image input upstream (HTTP 400, param=input).
+		// Reject it here, before forwarding over the WS turn, so Codex CLI users
+		// get the same fast, clear rejection as the HTTP /responses ingress path
+		// instead of a round-trip to the upstream account.
+		if isCodexSparkModel(upstreamModel) && openAIRequestBodyMayContainImageInput(normalized) {
+			payloadMap := make(map[string]any)
+			if err := json.Unmarshal(normalized, &payloadMap); err != nil {
+				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", err)
+			}
+			if err := validateCodexSparkInput(payloadMap, upstreamModel); err != nil {
+				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
+			}
+		}
 		imageIntent := IsImageGenerationIntentForPlatform(openAIResponsesEndpoint, originalModel, normalized, account.Platform)
 		if imageIntent && !imageGenerationAllowed {
 			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, ImageGenerationPermissionMessage(), nil)
